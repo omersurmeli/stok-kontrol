@@ -2,7 +2,7 @@ import unittest
 from decimal import Decimal
 from unittest.mock import patch
 from netsis_core import (
-    NetsisRepository, NetsisSettings, Stock, PriceChange,
+    NetsisRepository, NetsisSettings, Stock, PriceChange, AuditLogError,
     profit_margin, profit_markup, propose_change, round_up_to_90,
 )
 
@@ -90,6 +90,16 @@ class DatabaseTests(unittest.TestCase):
         sql, params = conn.cursor_obj.queries[0]
         self.assertIn("WHERE STOK_KODU=?", sql)
         self.assertEqual(params[2], "abc")
+
+    def test_audit_failure_does_not_claim_sql_rollback(self):
+        conn = FakeConnection([1])
+        repo = NetsisRepository(NetsisSettings("server", "db", write_enabled=True),
+                                connect_factory=lambda *_: conn)
+        with patch.object(repo, "_write_audit", side_effect=OSError("disk full")):
+            with self.assertRaises(AuditLogError):
+                repo.save_changes([self.change])
+        self.assertEqual(conn.commits, 1)
+        self.assertEqual(conn.rollbacks, 0)
 
     def test_concurrent_price_change_rolls_back_everything(self):
         conn = FakeConnection([1, 0])
