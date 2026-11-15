@@ -6,7 +6,7 @@ from tkinter import ttk, messagebox
 from decimal import Decimal
 
 from netsis_core import (
-    NetsisRepository, NetsisSettings, Stock, PriceChange,
+    NetsisRepository, NetsisSettings, Stock, PriceChange, AuditLogError,
     profit_markup, profit_margin, propose_change,
 )
 
@@ -322,6 +322,11 @@ class StockControlApp:
             return
         try:
             count = self.repo.save_changes(changes)
+        except AuditLogError as exc:
+            self.pending.clear()
+            messagebox.showwarning("SQL kaydı yapıldı; günlük hatası", str(exc))
+            self.reload()
+            return
         except Exception as exc:
             messagebox.showerror("Kayıt tamamlanamadı", str(exc))
             self.status.set("Kayıt sonucu kontrol edilmeli; hata rapor edildi.")
