@@ -151,6 +151,10 @@ class ConcurrentPriceChangeError(RuntimeError):
     """Netsis fiyatı okunduktan sonra değiştirilmiş ya da stok bulunamamış."""
 
 
+class AuditLogError(RuntimeError):
+    """SQL commit başarılı ancak yerel işlem günlüğü kaydedilemedi."""
+
+
 class NetsisRepository:
     """Yalnızca bilinen Netsis alanlarına erişir; kullanıcı girdisi SQL'e eklenmez."""
 
@@ -244,8 +248,14 @@ class NetsisRepository:
             raise
         finally:
             conn.close()
-        # SQL commit sonrası uygulama denetim izi; başarısızlığı ayrıca bildiriyoruz.
-        self._write_audit(changes)
+        # Commit başarılı oldu; audit hatası yanlışlıkla SQL rollback gibi sunulmaz.
+        try:
+            self._write_audit(changes)
+        except OSError as exc:
+            raise AuditLogError(
+                "Netsis fiyatları GÜNCELLENDİ; ancak yerel işlem geçmişi yazılamadı. "
+                "Günlük klasörünün yazma iznini kontrol edin."
+            ) from exc
         return len(changes)
 
     @staticmethod
